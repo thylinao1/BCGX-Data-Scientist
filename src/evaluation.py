@@ -1,13 +1,25 @@
 """Cost-sensitive evaluation utilities.
 
-The PowerCo churn problem is framed as a £-denominated decision problem:
+The PowerCo churn problem is framed as a single GBP-denominated decision
+problem. Three business inputs are enough to define every per-instance cost
+contribution:
 
-    expected_cost = FN * cost_fn          # missed churner -> lost CLV
-                  + FP * cost_fp          # unnecessary retention contact
-                  + TP * cost_tp          # successful retention (negative => benefit)
+    clv             : customer-lifetime value lost when a churner is missed
+    campaign_cost   : cost of contacting one customer with a retention offer
+    retention_rate  : probability that a contacted churner is actually retained
 
-These helpers are deliberately pure so they can be unit-tested and reused for
-CV-style threshold selection without copy-pasting code into notebooks.
+The implied per-confusion-matrix-cell contributions are:
+
+    FN  ->  clv                                      (lose the customer)
+    FP  ->  campaign_cost                             (waste a contact)
+    TP  ->  campaign_cost - clv * retention_rate     (pay to contact; in expectation, save the customer)
+    TN  ->  0
+
+With these definitions the two helpers below are mathematically consistent:
+``expected_cost(...) == -expected_value(...)`` whenever they are called with
+matching parameter values. Selecting an operating threshold by minimising
+``expected_cost`` is identical to selecting it by maximising
+``expected_value``.
 """
 
 from __future__ import annotations
@@ -20,16 +32,35 @@ import numpy as np
 
 @dataclass(frozen=True)
 class CostMatrix:
-    """Business-cost parameters.
+    """Business-cost parameters for the churn decision problem.
 
-    Defaults mirror the headline scenario in the modelling notebook but every
-    sensitivity sweep should override them rather than relying on these values.
+    All per-cell costs are derived from three primary inputs. Override any of
+    them to run sensitivity analysis on the corresponding lever.
     """
 
-    cost_fn: float = 50_000.0   # lost customer-lifetime value
-    cost_fp: float = 500.0      # cost of one retention contact
-    cost_tp: float = -10_000.0  # net benefit of one successful retention
-    cost_tn: float = 0.0
+    clv: float = 50_000.0
+    campaign_cost: float = 500.0
+    retention_rate: float = 0.3
+
+    @property
+    def cost_fn(self) -> float:
+        """Cost of missing a churner: the full CLV."""
+        return self.clv
+
+    @property
+    def cost_fp(self) -> float:
+        """Cost of a false alarm: one wasted retention contact."""
+        return self.campaign_cost
+
+    @property
+    def cost_tp(self) -> float:
+        """Net cost of a true positive: pay to contact, recover CLV with probability ``retention_rate``."""
+        return self.campaign_cost - self.clv * self.retention_rate
+
+    @property
+    def cost_tn(self) -> float:
+        """No cost for correctly leaving a non-churner alone."""
+        return 0.0
 
 
 def confusion_counts(
@@ -52,9 +83,9 @@ def expected_cost(
     threshold: float,
     costs: CostMatrix = CostMatrix(),
 ) -> float:
-    """Total expected £-cost at the supplied operating threshold.
+    """Total expected GBP-cost at the supplied operating threshold.
 
-    Negative values mean the model is net-positive vs. doing nothing.
+    Negative values mean the model is net-positive versus doing nothing.
     """
     y_pred = (np.asarray(y_prob) >= threshold).astype(int)
     tn, fp, fn, tp = confusion_counts(y_true, y_pred)
@@ -137,11 +168,17 @@ def expected_value(
 ) -> float:
     """Net expected value of the policy at ``threshold``.
 
-    Useful for sensitivity analysis on retention rate / CLV / campaign cost.
+    Equivalent to ``-expected_cost(...)`` with matching parameters.
+    Kept as a separate entry point so sensitivity sweeps can vary
+    ``retention_rate`` directly without constructing a :class:`CostMatrix`.
     """
-    y_pred = (np.asarray(y_prob) >= threshold).astype(int)
-    _, fp, fn, tp = confusion_counts(y_true, y_pred)
-    benefit = tp * clv * retention_rate
-    contact_cost = (tp + fp) * campaign_cost
-    missed = fn * clv
-    return benefit - contact_cost - missed
+    return -expected_cost(
+        y_true,
+        y_prob,
+        threshold,
+        costs=CostMatrix(
+            clv=clv,
+            campaign_cost=campaign_cost,
+            retention_rate=retention_rate,
+        ),
+    )

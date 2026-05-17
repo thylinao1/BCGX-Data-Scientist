@@ -20,13 +20,39 @@ def test_confusion_counts_simple():
     assert (tn, fp, fn, tp) == (1, 1, 1, 1)
 
 
+def test_cost_matrix_derives_per_cell_costs():
+    cm = CostMatrix(clv=50_000, campaign_cost=500, retention_rate=0.3)
+    assert cm.cost_fn == 50_000
+    assert cm.cost_fp == 500
+    # Pay 500 to contact, recover 50_000 * 0.3 in expectation
+    assert cm.cost_tp == 500 - 50_000 * 0.3
+    assert cm.cost_tn == 0.0
+
+
 def test_expected_cost_matches_manual_calculation():
     y_true = np.array([0, 0, 1, 1])
     y_prob = np.array([0.1, 0.9, 0.2, 0.8])
     # threshold 0.5 -> y_pred = [0, 1, 0, 1] -> tn=1, fp=1, fn=1, tp=1
-    costs = CostMatrix(cost_fn=50_000, cost_fp=500, cost_tp=-10_000, cost_tn=0)
-    expected = 1 * 0 + 1 * 500 + 1 * 50_000 + 1 * (-10_000)
+    costs = CostMatrix(clv=50_000, campaign_cost=500, retention_rate=0.3)
+    # cost_fn=50_000, cost_fp=500, cost_tp = 500 - 50_000 * 0.3 = -14_500
+    expected = 1 * 0 + 1 * 500 + 1 * 50_000 + 1 * (-14_500)
     assert expected_cost(y_true, y_prob, threshold=0.5, costs=costs) == expected
+
+
+def test_expected_cost_equals_negative_expected_value(synthetic_probs):
+    """The two evaluation entry points must agree mathematically."""
+    y, p = synthetic_probs
+    cm = CostMatrix(clv=50_000, campaign_cost=500, retention_rate=0.3)
+    for threshold in (0.05, 0.2, 0.5, 0.8):
+        ec = expected_cost(y, p, threshold, costs=cm)
+        ev = expected_value(
+            y, p, threshold,
+            clv=cm.clv, retention_rate=cm.retention_rate, campaign_cost=cm.campaign_cost,
+        )
+        assert abs(ec - (-ev)) < 1e-6, (
+            f"expected_cost and expected_value disagree at threshold={threshold}: "
+            f"ec={ec}, -ev={-ev}"
+        )
 
 
 def test_optimal_threshold_minimises_cost(synthetic_probs):
