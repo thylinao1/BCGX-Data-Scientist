@@ -67,12 +67,23 @@ threshold selected on a disjoint validation fold.
 
 | Quantity | Value |
 |----------|-------|
-| Cost-optimal threshold (validation) | ~0.05 |
-| Test-fold recall at cost-optimal threshold | ~0.9 |
-| Test-fold cost reduction vs. RF baseline at t = 0.5 | ~£13M (test fold, single snapshot) |
+| Cost-optimal threshold (validation) | ~0.01 (on the floor of the search grid) |
+| Test-fold recall at cost-optimal threshold | ~0.99 (~1.00 after calibration) |
+| Test-fold cost reduction vs. RF baseline at t = 0.5 | ~£16M (test fold, single snapshot) |
 | Threshold-optimisation gain divided by SMOTE-only gain | ~13x |
 | Cox PH hazard ratio for `has_gas` | ~0.90, p ~ 0.04 |
 | Cox PH concordance index | ~0.56 |
+
+The cost-optimal threshold lands at the bottom of the threshold sweep, which
+means the implied policy at the assumed cost parameters is to contact
+essentially every customer. This is mathematically correct given
+`CLV = £50k`, `campaign_cost = £500`, `retention_rate = 0.3` (the per-TP
+benefit of £14.5k swamps the £500 per-FP contact cost), but it is not a
+deployable policy. Section 11 of the modelling notebook prints the
+operational profile (contact rate, contacts per saved customer, campaign
+spend) so the headline figures cannot be read in isolation. Any real
+deployment would either tighten the cost assumptions or add an explicit
+contact-budget constraint.
 
 Re-run the modelling notebook to regenerate the exact values for your random
 seed and library versions.
