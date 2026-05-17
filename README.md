@@ -53,6 +53,12 @@ The main components are:
    proportional-hazards assumption.
 7. Permutation feature importance on the test fold using the frozen
    pipeline.
+8. Probability calibration via `CalibratedClassifierCV` (isotonic) so the
+   threshold lives on a meaningful probability scale.
+9. Bootstrap 95% confidence intervals for recall, precision and the
+   test-fold cost figure.
+10. Cohort-based validation using activation tenure to test cross-cohort
+    generalisation.
 
 ## Headline results
 
@@ -97,11 +103,17 @@ importance.
 |   |-- features.py
 |   |-- evaluation.py
 |   |-- model.py
+|   |-- calibration.py
+|   |-- uncertainty.py
+|   |-- time_split.py
 |   `-- survival.py
 |-- tests/
 |   |-- test_data_loading.py
 |   |-- test_evaluation.py
 |   |-- test_features.py
+|   |-- test_calibration.py
+|   |-- test_uncertainty.py
+|   |-- test_time_split.py
 |   `-- test_model.py
 `-- .github/workflows/ci.yml
 ```
@@ -132,7 +144,7 @@ Run the notebooks in order:
    the cost-sensitivity analysis, the survival analysis, and the test-fold
    evaluation.
 
-The shared logic lives under `src/` and is covered by 19 pytest unit
+The shared logic lives under `src/` and is covered by 37 pytest unit
 tests. CI runs on every push and pull request against Python 3.10 and 3.11.
 
 ## Limitations
