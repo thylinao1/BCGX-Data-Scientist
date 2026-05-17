@@ -1,0 +1,35 @@
+# Data — never commit raw or processed PowerCo data
+data/*.csv
+data/*.parquet
+data/raw/
+data/processed/
+!data/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Model artefacts
+*.pkl
+*.joblib
+models/
