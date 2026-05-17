@@ -25,8 +25,14 @@ is selected to minimise expected business cost on a held-out validation
 fold:
 
 ```
-expected_cost = FN * CLV + FP * campaign_cost + TP * retention_benefit
+expected_cost = FN * CLV
+              + FP * campaign_cost
+              + TP * (campaign_cost - CLV * retention_rate)
 ```
+
+The three inputs (CLV, campaign_cost, retention_rate) drive every per-cell
+cost so the threshold-selection logic and the expected-value sensitivity
+analysis use a single set of assumptions.
 
 The pipeline is built so the test fold is touched exactly once, at the end,
 to report final metrics. Threshold tuning and any hyper-parameter choices
@@ -134,7 +140,7 @@ tests. CI runs on every push and pull request against Python 3.10 and 3.11.
 1. The dataset is a single 2015 snapshot, so the test-fold cost reduction
    is a one-shot estimate. It is not an annualised figure and there is no
    out-of-time validation.
-2. Cost parameters (CLV £50k, campaign £500, retention benefit £10k) are
+2. Cost parameters (CLV £50k, campaign £500, retention rate 0.3) are
    assumed values taken from the original task description. The
    sensitivity analysis in the modelling notebook varies all three.
 3. SMOTE inflates the training class prevalence; the test fold remains at
