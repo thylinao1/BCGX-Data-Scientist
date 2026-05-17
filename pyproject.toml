@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "powerco-churn"
+version = "0.2.0"
+description = "Cost-sensitive churn modelling and survival analysis on the BCG X / PowerCo dataset."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "Maksim Silchenko"}]
+license = {file = "LICENSE"}
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+pythonpath = ["."]
