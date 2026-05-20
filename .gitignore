@@ -1,4 +1,4 @@
-# Data — never commit raw or processed PowerCo data
+# Data: never commit raw or processed PowerCo data
 data/*.csv
 data/*.parquet
 data/raw/
