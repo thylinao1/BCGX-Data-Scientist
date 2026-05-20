@@ -2,8 +2,9 @@
 
 Churn modelling on the PowerCo SME dataset (14,606 customers, 9.7% churn
 prevalence). The pipeline combines a SMOTE-balanced Random Forest with a
-cost-sensitive operating threshold and a Cox proportional-hazards survival
-model.
+cost-sensitive operating threshold, a Random Survival Forest for
+time-to-churn, and a pseudo out-of-time validation by contract activation
+date.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
@@ -48,17 +49,19 @@ The main components are:
    as mean and standard deviation across folds.
 5. Sensitivity analysis on the three cost levers (CLV, campaign cost,
    retention rate).
-6. Cox proportional-hazards model with log-transformed heavy-tailed
-   covariates, concordance index, and a Schoenfeld residual test of the
-   proportional-hazards assumption.
+6. Random Survival Forest for time-to-churn, reporting a held-out
+   concordance index and permutation importance. It replaces an earlier
+   linear Cox model that reached only ~0.56 concordance on this data.
 7. Permutation feature importance on the test fold using the frozen
    pipeline.
 8. Probability calibration via `CalibratedClassifierCV` (isotonic) so the
    threshold lives on a meaningful probability scale.
 9. Bootstrap 95% confidence intervals for recall, precision and the
    test-fold cost figure.
-10. Cohort-based validation using activation tenure to test cross-cohort
-    generalisation.
+10. Pseudo out-of-time validation: customers are partitioned by contract
+    activation date, the model is trained on the earlier cohort, and the
+    cost matrix is re-evaluated on the later cohort to test for temporal
+    drift.
 
 ## Headline results
 
@@ -71,8 +74,9 @@ threshold selected on a disjoint validation fold.
 | Test-fold recall at cost-optimal threshold | ~0.99 (~1.00 after calibration) |
 | Test-fold cost reduction vs. RF baseline at t = 0.5 | ~£16M (test fold, single snapshot) |
 | Threshold-optimisation gain divided by SMOTE-only gain | ~13x |
-| Cox PH hazard ratio for `has_gas` | ~0.90, p ~ 0.04 |
-| Cox PH concordance index | ~0.56 |
+| Random Survival Forest concordance (held-out) | ~0.71 (the linear Cox model reached only ~0.56) |
+| Out-of-time test AUC vs. random-split AUC | ~0.62 vs. ~0.67 |
+| Out-of-time cost-optimal threshold | ~0.01 (unchanged from the random split) |
 
 The cost-optimal threshold lands at the bottom of the threshold sweep, which
 means the implied policy at the assumed cost parameters is to contact
@@ -88,12 +92,27 @@ contact-budget constraint.
 Re-run the modelling notebook to regenerate the exact values for your random
 seed and library versions.
 
-The Cox model is fit on `[tenure, churn, log1p(cons_12m), log1p(net_margin),
-var_year_price_off_peak, has_gas]`. The statistically significant covariate
-is `has_gas`: dual-fuel customers show a ~10% lower churn hazard
-(HR ~ 0.90, p ~ 0.04). Campaign-origin features are not part of the Cox
-model; that signal is reported separately by the classifier's permutation
-importance.
+The survival model is a Random Survival Forest fit on 15 curated covariates
+(consumption, forecast, margin, price-variation and contract attributes),
+with contract tenure as the duration and churn as the event. It reaches a
+concordance index of ~0.71 on a held-out fold, against ~0.56 for the linear
+Cox model it replaces. Permutation importance puts the electricity-margin
+features (`margin_net_pow_ele`, `margin_gross_pow_ele`, `net_margin`) at the
+top, consistent with the classifier's own driver ranking. The training
+concordance is higher than the held-out figure, so the survival model is
+treated as a complement to the classifier rather than a standalone retention
+model.
+
+The out-of-time validation partitions customers by contract activation date,
+trains on the earliest ~80% of activations and evaluates on the most recent
+~20%. The cost-optimal threshold stays at the grid floor on the later cohort,
+so the *policy* is robust to drift. The classifier's discrimination is not:
+test AUC falls from ~0.67 on a random split to ~0.62 on the out-of-time
+cohort. The cost reduction figure remains large on the later cohort, but that
+is driven by its higher churn prevalence (~14% versus ~10%) rather than by
+better model quality, which is why the headline figure is reported on the
+random-split test fold and the out-of-time result is reported separately as a
+drift check.
 
 ## Repository layout
 
@@ -125,6 +144,7 @@ importance.
 |   |-- test_calibration.py
 |   |-- test_uncertainty.py
 |   |-- test_time_split.py
+|   |-- test_survival.py
 |   `-- test_model.py
 `-- .github/workflows/ci.yml
 ```
@@ -152,17 +172,19 @@ Run the notebooks in order:
 2. `notebooks/02_feature_engineering.ipynb` produces
    `data/data_for_predictions.csv`.
 3. `notebooks/03_modelling.ipynb` runs the full classification pipeline,
-   the cost-sensitivity analysis, the survival analysis, and the test-fold
-   evaluation.
+   the cost-sensitivity analysis, the Random Survival Forest, the
+   out-of-time validation, and the test-fold evaluation.
 
-The shared logic lives under `src/` and is covered by 37 pytest unit
+The shared logic lives under `src/` and is covered by 48 pytest unit
 tests. CI runs on every push and pull request against Python 3.10 and 3.11.
 
 ## Limitations
 
 1. The dataset is a single 2015 snapshot, so the test-fold cost reduction
-   is a one-shot estimate. It is not an annualised figure and there is no
-   out-of-time validation.
+   is a one-shot estimate, not an annualised figure. The out-of-time
+   validation partitions customers by activation date, but every churn
+   label is still observed at the same calendar moment, so it is a pseudo
+   out-of-time test, not a substitute for genuine out-of-time data.
 2. Cost parameters (CLV £50k, campaign £500, retention rate 0.3) are
    assumed values taken from the original task description. The
    sensitivity analysis in the modelling notebook varies all three.
@@ -174,10 +196,11 @@ tests. CI runs on every push and pull request against Python 3.10 and 3.11.
    competitor pricing, and no contract-change history. Conclusions about
    price sensitivity are limited to absolute price levels in this
    snapshot.
-5. The Cox concordance index is ~0.56, which is only marginally above
-   chance. The `has_gas` finding is real and statistically significant,
-   but the Cox model is treated as a complement to the classifier rather
-   than a standalone driver of retention strategy.
+5. The Random Survival Forest reaches ~0.71 concordance on a held-out
+   fold, but its training concordance is materially higher, so it carries
+   some overfitting. It is treated as a complement to the classifier and a
+   demonstration that tenure carries real signal, not a standalone
+   retention model.
 
 ## License
 

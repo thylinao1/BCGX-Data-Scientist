@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "powerco-churn"
-version = "0.2.0"
+version = "0.3.0"
 description = "Cost-sensitive churn modelling and survival analysis on the BCG X / PowerCo dataset."
 readme = "README.md"
 requires-python = ">=3.10"
