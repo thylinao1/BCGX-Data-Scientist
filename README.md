@@ -106,7 +106,7 @@ model.
 The out-of-time validation partitions customers by contract activation date,
 trains on the earliest ~80% of activations and evaluates on the most recent
 ~20%. The cost-optimal threshold stays at the grid floor on the later cohort,
-so the *policy* is robust to drift. The classifier's discrimination is not:
+so the *policy* is stable under drift. The classifier's discrimination is not:
 test AUC falls from ~0.67 on a random split to ~0.62 on the out-of-time
 cohort. The cost reduction figure remains large on the later cohort, but that
 is driven by its higher churn prevalence (~14% versus ~10%) rather than by
@@ -188,10 +188,12 @@ tests. CI runs on every push and pull request against Python 3.10 and 3.11.
 2. Cost parameters (CLV £50k, campaign £500, retention rate 0.3) are
    assumed values taken from the original task description. The
    sensitivity analysis in the modelling notebook varies all three.
-3. SMOTE inflates the training class prevalence; the test fold remains at
-   the natural prevalence (~9.7%). Probability calibration after SMOTE is
-   a known issue and would need isotonic or Platt scaling before any
-   production use.
+3. SMOTE inflates the training class prevalence and biases raw predicted
+   probabilities upward; the test fold remains at the natural prevalence
+   (~9.7%). The pipeline corrects the bias with isotonic calibration on a
+   disjoint holdout (Approach, step 8), but that calibration map is fit on
+   the single 2015 snapshot and would need re-fitting under the temporal
+   drift noted in limitation 1.
 4. The dataset contains no customer-service interaction data, no
    competitor pricing, and no contract-change history. Conclusions about
    price sensitivity are limited to absolute price levels in this
